@@ -4,12 +4,11 @@
 Agent Loop, LangGraph State Machine with real pause/resume, a Streamlit
 approval queue UI, and a FastAPI HTTP layer over the same underlying
 functions — plus Docker Compose to run the API and UI together, sharing one
-SQLite state store. The system runs entirely free of cost:
-`ANTHROPIC_API_KEY` is optional everywhere (Streamlit, the API, and the
-tests). Without it, everything runs in a deterministic demo mode that still
-exercises the full permission layer, risk taxonomy, pause/approve/execute
-flow, and audit trail — the safety-layer story doesn't depend on having a
-model at all.
+SQLite state store. The system runs entirely free of cost: `ANTHROPIC_API_KEY`
+is optional everywhere (Streamlit, the API, and the tests). Without it,
+everything runs in a deterministic demo mode that still exercises the full
+permission layer, risk taxonomy, pause/approve/execute flow, and audit
+trail — the safety-layer story doesn't depend on having a model at all.
 
 ## Why this order
 
@@ -126,11 +125,11 @@ docstring for the full reasoning.
   checkpointer, but nothing here has been tested under concurrent approval
   requests landing at once, and the FastAPI dev server run via `uvicorn`
   without `--workers` is single-process.
-- **Docker Compose is written but not run-verified in this session** — the
-  Dockerfiles and compose file follow standard patterns and the app code
-  they wrap is fully tested outside Docker, but building and running the
-  actual containers hasn't been done here. Worth a `docker compose up`
-  before relying on it for a live demo.
+- **Docker Compose is written and verified.** `docker compose up --build`
+  brings up both containers successfully: the API's `/health` endpoint
+  responds `200 OK` on the healthcheck interval, and Streamlit serves on
+  `:8501` (auto-detecting WSL and switching to poll-based file watching).
+  Confirmed by running it, not just by the Dockerfiles looking reasonable.
 
 ## Running it
 
@@ -245,53 +244,3 @@ status = start_run("...", Role.ANALYST, ClaudePlanner(), thread_id="run-1")
 No other code changes needed — that's the point of the `Planner` interface.
 
 ## Project structure
-
-```
-agent-sandbox/
-├── streamlit_app.py       # Phase 4: approval queue UI
-├── docker-compose.yml     # Phase 5: runs api + streamlit together, shared state
-├── Dockerfile.api
-├── Dockerfile.streamlit
-├── app/
-│   ├── schemas.py         # Pydantic contracts: Role, RiskScore, ToolCallRequest, etc.
-│   ├── registry.py        # Source of truth: tools + their risk scores (human-edited)
-│   ├── permissions.py     # Deterministic ALLOW/DENY/REQUIRES_APPROVAL check
-│   ├── executor.py        # execute_tool_call (checks perm) + dispatch_only (doesn't)
-│   ├── agent_loop.py      # Phase 2: manual loop, plan -> permission -> execute -> feed back
-│   ├── graph_state.py     # TypedDict state schema (JSON-serializable, checkpointed)
-│   ├── graph_nodes.py     # plan/permission/execute/denied/approval_wait/step_cap nodes
-│   ├── graph_build.py     # Wires nodes into a StateGraph, compiles with SqliteSaver
-│   ├── graph_runner.py    # start_run / resume_run / get_status / list_paused_runs
-│   ├── llm/
-│   │   ├── base.py             # Planner protocol + PlanStep
-│   │   ├── mock_planner.py     # ScriptedPlanner: deterministic, index-based (for tests)
-│   │   ├── demo_planner.py     # SingleToolDemoPlanner: stateless, for the Streamlit UI
-│   │   └── claude_planner.py   # ClaudePlanner: real Anthropic API, same interface
-│   ├── tools/impl/
-│   │   ├── calculator.py       # ast-based, no eval()
-│   │   ├── file_reader.py      # sandbox-jailed
-│   │   ├── csv_query.py        # sandbox-jailed, read-only
-│   │   └── mock_ticket_api.py  # HIGH risk, gated behind approval
-│   └── api.py              # Phase 5: FastAPI routes over graph_runner
-├── tests/
-│   ├── test_permissions.py     # Phase 1 verification, no LLM
-│   ├── test_agent_loop.py      # Phase 2 verification, scripted planner
-│   ├── test_graph_agent.py     # Phase 3 verification: pause, resume, restart-survival
-│   ├── test_approval_queue.py  # Phase 4 verification: queue listing, decided_by, modify-args
-│   └── test_api.py             # Phase 5 verification: HTTP status codes, request/response schemas
-├── sandbox_files/          # Files file_reader/csv_query are allowed to touch
-├── audit_log.jsonl         # Generated on first run; logs every step and approval
-└── agent_state.db          # Generated on first graph run; LangGraph's SQLite checkpoints
-```
-
-## What's left, if you keep going
-
-All five original checklist phases are done. If this becomes a longer-lived
-project rather than a portfolio piece, the honest next steps in priority
-order would be: (1) actually run `docker compose up` once end-to-end and
-fix whatever breaks — it's untested as containers, not just as code; (2)
-some form of real auth so `decided_by` and role assignment aren't
-self-reported; (3) a second HIGH-risk tool with genuine external
-consequences (not mocked) to prove the risk taxonomy holds up outside a
-controlled demo; (4) concurrency testing for multiple approvals in flight
-at once.
