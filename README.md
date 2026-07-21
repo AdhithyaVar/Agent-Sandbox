@@ -244,3 +244,39 @@ status = start_run("...", Role.ANALYST, ClaudePlanner(), thread_id="run-1")
 No other code changes needed — that's the point of the `Planner` interface.
 
 ## Project structure
+
+agent-sandbox/
+├── streamlit_app.py # Phase 4: approval queue UI
+├── docker-compose.yml # Phase 5: runs api + streamlit together, shared state
+├── Dockerfile.api
+├── Dockerfile.streamlit
+├── app/
+│ ├── schemas.py # Pydantic contracts: Role, RiskScore, ToolCallRequest, etc.
+│ ├── registry.py # Source of truth: tools + their risk scores (human-edited)
+│ ├── permissions.py # Deterministic ALLOW/DENY/REQUIRES_APPROVAL check
+│ ├── executor.py # execute_tool_call (checks perm) + dispatch_only (doesn't)
+│ ├── agent_loop.py # Phase 2: manual loop, plan -> permission -> execute -> feed back
+│ ├── graph_state.py # TypedDict state schema (JSON-serializable, checkpointed)
+│ ├── graph_nodes.py # plan/permission/execute/denied/approval_wait/step_cap nodes
+│ ├── graph_build.py # Wires nodes into a StateGraph, compiles with SqliteSaver
+│ ├── graph_runner.py # start_run / resume_run / get_status / list_paused_runs
+│ ├── llm/
+│ │ ├── base.py # Planner protocol + PlanStep
+│ │ ├── mock_planner.py # ScriptedPlanner: deterministic, index-based (for tests)
+│ │ ├── demo_planner.py # SingleToolDemoPlanner: stateless, for the Streamlit UI
+│ │ └── claude_planner.py # ClaudePlanner: real Anthropic API, same interface
+│ ├── tools/impl/
+│ │ ├── calculator.py # ast-based, no eval()
+│ │ ├── file_reader.py # sandbox-jailed
+│ │ ├── csv_query.py # sandbox-jailed, read-only
+│ │ └── mock_ticket_api.py # HIGH risk, gated behind approval
+│ └── api.py # Phase 5: FastAPI routes over graph_runner
+├── tests/
+│ ├── test_permissions.py # Phase 1 verification, no LLM
+│ ├── test_agent_loop.py # Phase 2 verification, scripted planner
+│ ├── test_graph_agent.py # Phase 3 verification: pause, resume, restart-survival
+│ ├── test_approval_queue.py # Phase 4 verification: queue listing, decided_by, modify-args
+│ └── test_api.py # Phase 5 verification: HTTP status codes, request/response schemas
+├── sandbox_files/ # Files file_reader/csv_query are allowed to touch
+├── audit_log.jsonl # Generated on first run; logs every step and approval
+└── agent_state.db # Generated on first graph run; LangGraph's SQLite checkpoints
