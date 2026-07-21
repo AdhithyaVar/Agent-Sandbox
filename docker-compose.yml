@@ -1,0 +1,37 @@
+version: "3.9"
+
+# Both services mount the project directory so they share the same
+# audit_log.jsonl and agent_state.db on the host -- the API and the
+# Streamlit UI are two views over one shared state store, not two
+# independent copies of the system. ANTHROPIC_API_KEY is optional; if unset,
+# both services fall back to their respective demo/no-key modes (see README).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    depends_on:
+      - api

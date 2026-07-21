@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+audit_log.jsonl
+agent_state.db
+tests/_test_agent_state.db
+tests/_test_phase4_state.db
+tests/_test_api_state.db
+tests/_test_api_audit_log.jsonl
+.env
+.streamlit/secrets.toml
